@@ -1,0 +1,100 @@
+.include "M328PDEF.INC"
+.cseg
+.org 0x00
+
+// Stack pointer
+LDI R16, LOW (RAMEND)
+OUT SPL, R16
+LDI R17, HIGH (RAMEND)
+OUT SPH, R17
+
+// Configuración
+Setup:
+    LDI R16, 0b1000_0000
+    LDI R16, (1 << CLKPCE)
+    STS CLKPR, R16 ; Habilitando el prescaler
+
+    LDI R16, 0b0000_0011
+    STS CLKPR, R16 ; Definiendo prescaler de 8fcpu = 2MHz
+
+    // Establecer PD2 y PD3 como entradas con pull-up
+    LDI R16, (1 << PD2) | (1 << PD3)
+    OUT PORTD, R16 ; Habilitando el pull-up en los pines PD2 y PD3
+    CBI DDRD, PD2 ; Configuración PD2 como entrada
+    CBI DDRD, PD3 ; Configuración PD3 como entrada
+
+    // Establecer PB5-PB2 como salidas (para el contador de 4 bits)
+    LDI R16, (1 << PB5) | (1 << PB4) | (1 << PB3) | (1 << PB2)
+    OUT DDRB, R16
+
+    // Inicializar el contador en 0
+    CLR R19
+    OUT PORTB, R19
+
+    //
+LOOP:
+    // Leer el estado de los botones en PD2 y PD3
+    IN R16, PIND ; Lee el estado de todos los pines de PORTD
+
+    // Extraer el estado de PD2 y PD3 a R17 y R18
+    MOV R17, R16
+    SWAP R17
+    ANDI R17, 0b00000001 ; R17 contiene el estado de PD2
+    ANDI R18, 0b00000010 ; R18 contiene el estado de PD3
+
+    // Verificar el estado de PD2 (botón incrementar)
+    CPSE R17, R17 ; Salta si R17 (PD2) está en 0 (botón incrementar presionado)
+    RJMP CheckDecrement ; Si el botón incrementar está presionado, ir a verificar decremento
+
+    // Realizar el incremento del contador de 4 bits
+    INC R19 ; Incrementar el contador
+    LDI R20,
+	CP R19, R20 ; Verificar si el contador alcanzó 16
+    BREQ ResetCounter ; Si el contador es igual a 16, reiniciar a 0
+
+    // Establecer bits específicos en el puerto B (PB5 a PB2) con el valor del contador
+    OUT PORTB, R19
+
+    RJMP LOOP ; Volver al bucle principal
+
+CheckDecrement:
+    // Verificar el estado de PD3 (botón decrementar)
+    CPSE R18, R18 ; Salta si R18 (PD3) está en 0 (botón decrementar presionado)
+    RJMP LOOP ; Si el botón decrementar está presionado, volver al bucle principal
+
+    // Realizar el decremento del contador de 4 bits
+    DEC R19 ; Decrementar el contador
+    BRMI SetMaxValue ; Si es negativo, establecer el valor máximo (15)
+
+    // Establecer bits específicos en el puerto B (PB5 a PB2) con el valor del contador
+    OUT PORTB, R19
+
+    RJMP LOOP ; Volver al bucle principal
+
+SetMaxValue:
+    // Establecer el valor máximo del contador
+    LDI R19, 15
+
+    // Establecer bits específicos en el puerto B (PB5 a PB2) con el valor del contador
+    OUT PORTB, R19
+
+    RJMP LOOP ; Volver al bucle principal
+
+ResetCounter:
+    // Reiniciar el contador a 0
+    CLR R19
+
+    // Establecer bits específicos en el puerto B (PB5 a PB2) con el valor del contador
+    OUT PORTB, R19
+
+    RJMP LOOP ; Volver al bucle principal
+
+
+DelayBounce:
+	// Esperar un breve tiempo para evitar rebotes
+	LDI R16, 50
+delay:
+	DEC R16
+	BRNE delay
+	RJMP LOOP
+	RET 
